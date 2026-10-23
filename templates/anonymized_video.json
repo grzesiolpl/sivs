@@ -1,0 +1,96 @@
+{
+  "project": "anonymized_medical",
+  "output": {
+    "container": "mp4",
+    "video_codec": "libx264",
+    "audio_codec": "aac",
+    "crf": 20,
+    "preset": "medium",
+    "resolution": "1920x1080",
+    "framerate": 30
+  },
+  "operations": [
+    {
+      "action": "keep_range",
+      "file": "clip_01.mp4",
+      "start": 0,
+      "end": 50,
+      "description": "Początek: 0-50s"
+    },
+    {
+      "action": "remove_range",
+      "file": "clip_02.mp4",
+      "start": 19,
+      "end": 30,
+      "description": "Autoportret - wyciąć 19-30s"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_03.mp4",
+      "start": 11,
+      "end": 46,
+      "description": "Fragment 1: 11-46s"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_03.mp4",
+      "start": 55,
+      "end": 62,
+      "description": "Fragment 2: 55-62s"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_04.mp4",
+      "start": 3,
+      "end": 45,
+      "description": "Baza: 3-45s"
+    },
+    {
+      "action": "slow_motion",
+      "file": "clip_04.mp4",
+      "start": 38,
+      "end": 41,
+      "speed": 0.33,
+      "description": "Błyskawica/jarzenie: zwolnienie 3x (38-41s)"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_06.mp4",
+      "start": 6,
+      "end": 20,
+      "description": "Fragment: 00:06-00:20"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_06.mp4",
+      "start": 39,
+      "end": 116,
+      "description": "Fragment: 00:39-01:56"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_06.mp4",
+      "start": 130,
+      "end": 135,
+      "description": "Fragment: 02:10-02:15"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_06.mp4",
+      "start": 150,
+      "end": 170,
+      "description": "Fragment: 02:30-02:50"
+    }
+  ],
+  "approval_required": true,
+  "post_processing": {
+    "face_blur": {
+      "enabled": true,
+      "note": "Wymaga ręcznego dopracowania w DaVinci (Face Refinement)"
+    },
+    "upscale": {
+      "enabled": false,
+      "note": "Opcjonalnie: Real-ESRGAN 2x na wybranych klipach"
+    }
+  }
+}

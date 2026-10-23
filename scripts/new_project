@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""
+new_project — tworzy nowy projekt w AI-Video-Studio
+Użycie: ./scripts/new_project <project_name> [--template <template_name>]
+"""
+import argparse
+import shutil
+from pathlib import Path
+import yaml
+
+STUDIO_ROOT = Path(__file__).parent.parent
+TEMPLATES_DIR = STUDIO_ROOT / "templates"
+PROJECTS_DIR = STUDIO_ROOT / "projects"
+CONFIG_DIR = STUDIO_ROOT / "config"
+
+DEFAULT_TEMPLATE = {
+    "project": "",
+    "output": {
+        "container": "mp4",
+        "video_codec": "libx264",
+        "audio_codec": "aac",
+        "crf": 20,
+        "preset": "medium",
+        "resolution": "1920x1080",
+        "framerate": 30
+    },
+    "operations": [],
+    "approval_required": True
+}
+
+def load_settings():
+    settings_path = CONFIG_DIR / "settings.yaml"
+    if settings_path.exists():
+        with open(settings_path) as f:
+            return yaml.safe_load(f)
+    return {}
+
+def create_project(name: str, template_name: str = None):
+    project_dir = PROJECTS_DIR / name
+    if project_dir.exists():
+        print(f"❌ Projekt '{name}' już istnieje: {project_dir}")
+        return False
+
+    # Create directory structure
+    (project_dir / "input").mkdir(parents=True)
+    (project_dir / "previews").mkdir(parents=True)
+    (project_dir / "output").mkdir(parents=True)
+
+    # Copy template or create default edit_plan.json
+    edit_plan = DEFAULT_TEMPLATE.copy()
+    edit_plan["project"] = name
+
+    if template_name:
+        template_path = TEMPLATES_DIR / f"{template_name}.json"
+        if template_path.exists():
+            import json
+            with open(template_path) as f:
+                template_data = json.load(f)
+                edit_plan.update(template_data)
+        else:
+            print(f"⚠️  Szablon '{template_name}' nie znaleziony, używam domyślnego")
+
+    # Write edit_plan.json
+    import json
+    with open(project_dir / "edit_plan.json", "w") as f:
+        json.dump(edit_plan, f, indent=2)
+
+    # Create empty brief.md
+    (project_dir / "brief.md").write_text(f"# Brief: {name}\n\nOpisz co ma zrobić system...\n")
+
+    # Create .gitignore for project
+    (project_dir / ".gitignore").write_text("""previews/
+output/
+*.log
+.DS_Store
+""")
+
+    print(f"✅ Projekt utworzony: {project_dir}")
+    print(f"   📁 input/       — wrzuć tu surowce")
+    print(f"   📝 brief.md     — opisz co chcesz uzyskać")
+    print(f"   📋 edit_plan.json — plan montażu (wygeneruje AI)")
+    print(f"   🎬 previews/    — podglądy do akceptacji")
+    print(f"   📦 output/      — finalne pliki")
+    return True
+
+def main():
+    parser = argparse.ArgumentParser(description="Create new AI-Video-Studio project")
+    parser.add_argument("name", help="Project name (directory name)")
+    parser.add_argument("--template", "-t", help="Template name from templates/")
+    args = parser.parse_args()
+
+    create_project(args.name, args.template)
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""
+export_project — Eksportuje projekt do różnych formatów NLE/DAW
+Użycie: ./scripts/export_project <project_name> --target <target> --mode <mode> [--preset <preset>]
+
+Targets:
+  fcp            - Final Cut Pro (FCPXML)
+  davinci        - DaVinci Resolve (FCPXML + EDL)
+  after_effects  - After Effects / Premiere (FCP7 XML)
+  daw_audio      - Audio DAW (EDL / WAV)
+  universal      - Universal MP4
+
+Modes:
+  timeline       - Błyskawiczny, XML/EDL bez re-enkodowania
+  render         - Fizyczny render pliku wideo/audio
+"""
+import json
+import sys
+import subprocess
+from pathlib import Path
+
+STUDIO_ROOT = Path(__file__).parent.parent
+PROJECTS_DIR = STUDIO_ROOT / "projects"
+CONFIG_DIR = STUDIO_ROOT / "config"
+EXPORTERS_DIR = STUDIO_ROOT / "scripts" / "exporters"
+
+
+def load_export_presets():
+    presets_path = CONFIG_DIR / "export_presets.json"
+    if presets_path.exists():
+        with open(presets_path) as f:
+            return json.load(f)
+    return {}
+
+
+def get_preset_for_target(target: str, mode: str, preset_override: str = None):
+    presets = load_export_presets()
+    
+    if preset_override and preset_override in presets:
+        return presets[preset_override]
+    
+    # Default preset mapping
+    mapping = {
+        ("fcp", "timeline"): "fcp_timeline",
+        ("fcp", "render"): "fcp_render_prores",
+        ("davinci", "timeline"): "davinci_timeline",
+        ("davinci", "render"): "davinci_render_prores",
+        ("after_effects", "timeline"): "after_effects_timeline",
+        ("after_effects", "render"): "after_effects_render",
+        ("daw_audio", "timeline"): "daw_audio_timeline",
+        ("daw_audio", "render"): "daw_audio_render",
+        ("universal", "render"): "universal_render",
+        ("universal", "timeline"): "universal_render",  # fallback
+    }
+    
+    preset_name = mapping.get((target, mode))
+    if preset_name and preset_name in presets:
+        return presets[preset_name]
+    
+    return None
+
+
+def run_exporter(script_name: str, project_dir: Path, output_path: Path, extra_args: list = None):
+    script_path = EXPORTERS_DIR / script_name
+    if not script_path.exists():
+        return {"success": False, "error": f"Exporter {script_name} not found"}
+    
+    cmd = ["python3", str(script_path), str(project_dir), str(output_path)]
+    if extra_args:
+        cmd.extend(extra_args)
+    
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    return {
+        "success": result.returncode == 0,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "returncode": result.returncode
+    }
+
+
+def run_ffmpeg_render(project_dir: Path, plan: dict, preset: dict, output_path: Path) -> dict:
+    """Render video using FFmpeg with preset settings."""
+    operations = plan.get("operations", [])
+    media = plan.get("media", {})
+    
+    if not operations:
+        return {"success": False, "error": "No operations in plan"}
+    
+    # Build filter complex for concatenation
+    # This is a simplified version - for full implementation would need proper concat
+    output_settings = plan.get("output", {})
+    framerate = output_settings.get("framerate", 30)
+    resolution = output_settings.get("resolution", "1920x1080")
+    
+    # For now, delegate to existing render script for "render" mode
+    # and just change the output parameters
+    return {"success": False, "error": "Full render implementation pending - use studio render for now"}
+
+
+def export_timeline(project_name: str, target: str, preset: dict) -> dict:
+    """Export timeline format (XML/EDL) without re-encoding."""
+    project_dir = PROJECTS_DIR / project_name
+    if not project_dir.exists():
+        return {"success": False, "error": f"Project {project_name} not found"}
+    
+    plan_path = project_dir / "edit_plan.json"
+    if not plan_path.exists():
+        return {"success": False, "error": "No edit_plan.json"}
+    
+    with open(plan_path) as f:
+        plan = json.load(f)
+    
+    output_dir = project_dir / "output"
+    output_dir.mkdir(exist_ok=True)
+    
+    ext = preset.get("output_ext", ".xml")
+    output_name = f"{plan.get('project', project_name)}{ext}"
+    output_path = output_dir / output_name
+    
+    # Choose exporter based on target
+    if target == "fcp":
+        result = run_exporter("export_fcpxml.py", project_dir, output_path)
+    elif target == "davinci":
+        # Export both FCPXML and EDL
+        result = run_exporter("export_fcpxml.py", project_dir, output_path)
+        if result["success"]:
+            edl_path = output_dir / f"{plan.get('project', project_name)}.edl"
+            edl_result = run_exporter("export_edl.py", project_dir, edl_path)
+            result["edl_path"] = str(edl_path)
+    elif target == "after_effects":
+        result = run_exporter("export_fcp7_xml.py", project_dir, output_path)
+    elif target == "daw_audio":
+        result = run_exporter("export_edl.py", project_dir, output_path, ["--audio-only"])
+    else:
+        return {"success": False, "error": f"Timeline export not supported for target: {target}"}
+    
+    if result["success"]:
+        result["output_path"] = str(output_path)
+        result["target"] = target
+        result["mode"] = "timeline"
+    
+    return result
+
+
+def export_render(project_name: str, target: str, preset: dict) -> dict:
+    """Render video/audio file with target-specific codec settings."""
+    project_dir = PROJECTS_DIR / project_name
+    if not project_dir.exists():
+        return {"success": False, "error": f"Project {project_name} not found"}
+    
+    plan_path = project_dir / "edit_plan.json"
+    if not plan_path.exists():
+        return {"success": False, "error": "No edit_plan.json"}
+    
+    with open(plan_path) as f:
+        plan = json.load(f)
+    
+    output_dir = project_dir / "output"
+    output_dir.mkdir(exist_ok=True)
+    
+    ext = preset.get("output_ext", ".mov")
+    output_name = f"{plan.get('project', project_name)}__{target}{ext}"
+    output_path = output_dir / output_name
+    
+    # Build ffmpeg command from preset
+    # This is a simplified version - full implementation would process operations
+    return {"success": False, "error": "Full render implementation pending - use studio render + transcode"}
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Export project for NLE/DAW")
+    parser.add_argument("project", help="Project name")
+    parser.add_argument("--target", choices=["fcp", "davinci", "after_effects", "daw_audio", "universal"], required=True)
+    parser.add_argument("--mode", choices=["timeline", "render"], default="timeline")
+    parser.add_argument("--preset", help="Specific preset from export_presets.json")
+    args = parser.parse_args()
+    
+    preset = get_preset_for_target(args.target, args.mode, args.preset)
+    if not preset:
+        print(f"❌ No preset found for target={args.target}, mode={args.mode}")
+        sys.exit(1)
+    
+    print(f"📤 Eksport: {args.project} -> {args.target} ({args.mode})")
+    print(f"   Preset: {preset.get('description', 'custom')}")
+    
+    if args.mode == "timeline":
+        result = export_timeline(args.project, args.target, preset)
+    else:
+        result = export_render(args.project, args.target, preset)
+    
+    if result.get("success"):
+        print(f"✅ Eksport zakończony: {result.get('output_path', result.get('edl_path', 'done'))}")
+        if result.get("edl_path"):
+            print(f"   EDL: {result['edl_path']}")
+    else:
+        print(f"❌ Błąd: {result.get('error', 'Unknown error')}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

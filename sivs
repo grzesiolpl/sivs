@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# SIVS - Unified entry point
+# Usage: ./sivs [args]  OR  sivs [args] (when in PATH)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log() { echo -e "${BLUE}==>${NC} $1"; }
+ok() { echo -e "${GREEN}✅${NC} $1"; }
+warn() { echo -e "${YELLOW}⚠️${NC} $1"; }
+err() { echo -e "${RED}❌${NC} $1"; }
+
+show_help() {
+    cat <<'EOF'
+SIVS - Super Intelligence Video Studio
+
+USAGE:
+  sivs [OPTIONS] [video_file]
+
+INTERFACES:
+  sivs                    Start TUI, select file interactively
+  sivs video.mp4          Open video.mp4 directly in TUI
+  sivs --web              Launch Web UI (Next.js) at http://localhost:3000
+
+SETUP:
+  sivs --setup            First-time configuration wizard
+  sivs --doctor           Check system dependencies
+  sivs --config           Show current configuration
+
+HELP:
+  sivs --help             Show this help
+  sivs --help-full        Show full usage guide (TUI)
+
+EXAMPLES:
+  sivs                    # Interactive TUI
+  sivs ~/Movies/clip.mp4  # Open specific file
+  sivs --web              # Launch Web UI in browser
+  sivs --setup            # Configure API key, model, workspace
+
+ARCHITECTURE:
+  tui/   - Terminal UI (Python/Textual) - keyboard-first, in-place editing
+  web/   - Web UI (Next.js + Electron) - visual timeline editor
+  shared/ - Shared utilities (framerate normalization, etc.)
+  scripts/ - CLI pipeline for batch/automation
+  templates/ - Project templates
+
+EOF
+}
+
+# Parse args
+case "${1:-}" in
+    --help|-h)
+        show_help
+        exit 0
+        ;;
+    --help-full)
+        exec "$SCRIPT_DIR/tui/sivs" --help-full
+        ;;
+    --setup)
+        exec "$SCRIPT_DIR/tui/sivs" --setup
+        ;;
+    --doctor)
+        exec "$SCRIPT_DIR/tui/sivs" --doctor
+        ;;
+    --config)
+        exec "$SCRIPT_DIR/tui/sivs" --config
+        ;;
+    --web)
+        log "Starting SIVS Web UI..."
+        cd "$SCRIPT_DIR/web"
+        if [ ! -d "node_modules" ]; then
+            log "Installing dependencies..."
+            npm install
+        fi
+        log "Opening http://localhost:3000"
+        npm run dev
+        ;;
+    --version)
+        exec "$SCRIPT_DIR/tui/sivs" --version
+        ;;
+    *)
+        # Default: launch TUI
+        exec "$SCRIPT_DIR/tui/sivs" "$@"
+        ;;
+esac

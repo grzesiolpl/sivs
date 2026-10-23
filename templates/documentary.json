@@ -1,0 +1,64 @@
+{
+  "project": "documentary",
+  "output": {
+    "container": "mov",
+    "video_codec": "prores_ks",
+    "profile": "lt",
+    "audio_codec": "pcm_s24le",
+    "resolution": "1920x1080",
+    "framerate": 24
+  },
+  "operations": [
+    {
+      "action": "keep_range",
+      "file": "clip_01.mp4",
+      "start": 0,
+      "end": 120,
+      "description": "Establishing shot: sunrise over mountains (0-120s)"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_02.mp4",
+      "start": 15,
+      "end": 75,
+      "description": "Interview subject A: childhood memories (15-75s)"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_03.mp4",
+      "start": 5,
+      "end": 45,
+      "description": "B-roll: hands working on craft (5-45s)"
+    },
+    {
+      "action": "slow_motion",
+      "file": "clip_04.mp4",
+      "start": 10,
+      "end": 14,
+      "speed": 0.25,
+      "description": "Slow-mo: water droplets falling (4x slower)"
+    },
+    {
+      "action": "keep_range",
+      "file": "clip_05.mp4",
+      "start": 0,
+      "end": 90,
+      "description": "Wide landscape: valley pan (0-90s)"
+    }
+  ],
+  "approval_required": true,
+  "post_processing": {
+    "face_blur": {
+      "enabled": false,
+      "note": "Not needed for documentary"
+    },
+    "upscale": {
+      "enabled": false,
+      "note": "Optional: Real-ESRGAN 2x on archival footage"
+    },
+    "color_grade": {
+      "enabled": true,
+      "note": "Cinematic LUT + film grain in DaVinci"
+    }
+  }
+}

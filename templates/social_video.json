@@ -1,0 +1,14 @@
+{
+  "project": "social_video",
+  "output": {
+    "container": "mp4",
+    "video_codec": "libx264",
+    "audio_codec": "aac",
+    "crf": 22,
+    "preset": "fast",
+    "resolution": "1080x1920",
+    "framerate": 30
+  },
+  "operations": [],
+  "approval_required": true
+}

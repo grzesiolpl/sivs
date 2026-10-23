@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""
+studio — główny punkt wejścia AI-Video-Studio
+Użycie:
+  studio new <name> [--template <t>]
+  studio analyze <name>
+  studio render <name> [--preview] [--validate]
+  studio qc <name> [--stage preview|final]
+  studio plan <name>       # otwiera edit_plan.json w edytorze
+  studio open <name>       # otwiera folder projektu
+"""
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+STUDIO_ROOT = Path(__file__).parent.parent
+SCRIPTS_DIR = STUDIO_ROOT / "scripts"
+PROJECTS_DIR = STUDIO_ROOT / "projects"
+
+def run_script(script_name: str, args: list):
+    script_path = SCRIPTS_DIR / script_name
+    if not script_path.exists():
+        print(f"❌ Skrypt {script_name} nie istnieje")
+        return False
+    result = subprocess.run([str(script_path)] + args)
+    return result.returncode == 0
+
+def cmd_new(args):
+    return run_script("new_project", [args.name] + (["--template", args.template] if args.template else []))
+
+def cmd_analyze(args):
+    return run_script("analyze_media", [args.name])
+
+def cmd_render(args):
+    render_args = [args.name]
+    if args.preview:
+        render_args.append("--preview")
+    if args.validate:
+        render_args.append("--validate-only")
+    return run_script("render_project", render_args)
+
+def cmd_qc(args):
+    return run_script("quality_check", [args.name, "--stage", args.stage])
+
+def cmd_export(args):
+    return run_script("export_project", [args.name, "--target", args.target, "--mode", args.mode] + (["--preset", args.preset] if args.preset else []))
+
+
+def cmd_plan(args):
+    plan_path = PROJECTS_DIR / args.name / "edit_plan.json"
+    if not plan_path.exists():
+        print(f"❌ Brak edit_plan.json w projekcie {args.name}")
+        return False
+    editor = sys.environ.get("EDITOR", "code")
+    subprocess.run([editor, str(plan_path)])
+    return True
+
+def cmd_open(args):
+    project_dir = PROJECTS_DIR / args.name
+    if not project_dir.exists():
+        print(f"❌ Projekt {args.name} nie istnieje")
+        return False
+    subprocess.run(["open", str(project_dir)])  # macOS
+    return True
+
+def main():
+    parser = argparse.ArgumentParser(prog="studio", description="AI-Video-Studio CLI")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # new
+    p_new = subparsers.add_parser("new", help="Create new project")
+    p_new.add_argument("name")
+    p_new.add_argument("--template", "-t", help="Template name")
+
+    # analyze
+    p_analyze = subparsers.add_parser("analyze", help="Analyze media files in project")
+    p_analyze.add_argument("name")
+
+    # render
+    p_render = subparsers.add_parser("render", help="Render project (preview or final)")
+    p_render.add_argument("name")
+    p_render.add_argument("--preview", action="store_true", help="Render preview (lower quality)")
+    p_render.add_argument("--validate", action="store_true", help="Only validate plan")
+
+    # qc
+    p_qc = subparsers.add_parser("qc", help="Quality check rendered video")
+    p_qc.add_argument("name")
+    p_qc.add_argument("--stage", choices=["preview", "final"], default="preview")
+
+    # export
+    p_export = subparsers.add_parser("export", help="Export project for NLE/DAW (FCPXML, EDL, etc.)")
+    p_export.add_argument("name")
+    p_export.add_argument("--target", choices=["fcp", "davinci", "after_effects", "daw_audio", "universal"], required=True, help="Target NLE/DAW")
+    p_export.add_argument("--mode", choices=["timeline", "render"], default="timeline", help="Export mode: timeline (XML/EDL) or render (video file)")
+    p_export.add_argument("--preset", help="Specific preset from export_presets.json")
+
+    # plan
+    p_plan = subparsers.add_parser("plan", help="Open edit_plan.json in editor")
+    p_plan.add_argument("name")
+
+    # open
+    p_open = subparsers.add_parser("open", help="Open project folder in Finder")
+    p_open.add_argument("name")
+
+    args = parser.parse_args()
+
+    commands = {
+        "new": cmd_new,
+        "analyze": cmd_analyze,
+        "render": cmd_render,
+        "qc": cmd_qc,
+        "export": cmd_export,
+        "plan": cmd_plan,
+        "open": cmd_open,
+    }
+
+    success = commands[args.command](args)
+    sys.exit(0 if success else 1)
+
+if __name__ == "__main__":
+    main()

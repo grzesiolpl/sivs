@@ -1,0 +1,67 @@
+# SIVS Unified - .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.coverage
+
+# Node.js / Web UI
+web/node_modules/
+web/.next/
+web/out/
+web/dist/
+web/*.log
+web/.turbo/
+web/.vercel/
+
+# Electron
+web/electron/dist/
+web/electron/*.dmg
+web/electron/*.app/
+
+# macOS
+.DS_Store
+*.dmg
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Config / Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# SIVS Runtime
+.sivs/
+*.log
+*.tmp
+
+# Test videos / Media
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.m4v
+!test_videos/
+
+# Backup
+*~
+*.bak
+*.backup

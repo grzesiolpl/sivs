@@ -1,0 +1,190 @@
+{
+  "youtube_1080p": {
+    "container": "mp4",
+    "video_codec": "libx264",
+    "audio_codec": "aac",
+    "crf": 18,
+    "preset": "slow",
+    "resolution": "1920x1080",
+    "framerate": 30,
+    "extra_args": ["-movflags", "+faststart", "-pix_fmt", "yuv420p"]
+  },
+  "youtube_4k": {
+    "container": "mp4",
+    "video_codec": "libx264",
+    "audio_codec": "aac",
+    "crf": 20,
+    "preset": "slow",
+    "resolution": "3840x2160",
+    "framerate": 30,
+    "extra_args": ["-movflags", "+faststart", "-pix_fmt", "yuv420p"]
+  },
+  "instagram_reel": {
+    "container": "mp4",
+    "video_codec": "libx264",
+    "audio_codec": "aac",
+    "crf": 22,
+    "preset": "medium",
+    "resolution": "1080x1920",
+    "framerate": 30,
+    "extra_args": ["-movflags", "+faststart", "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2"]
+  },
+  "twitter_video": {
+    "container": "mp4",
+    "video_codec": "libx264",
+    "audio_codec": "aac",
+    "crf": 24,
+    "preset": "fast",
+    "resolution": "1280x720",
+    "framerate": 30,
+    "extra_args": ["-movflags", "+faststart", "-fs", "512M"]
+  },
+  "archive_prores": {
+    "container": "mov",
+    "video_codec": "prores_ks",
+    "profile": 3,
+    "audio_codec": "pcm_s16le",
+    "resolution": "1920x1080",
+    "framerate": 30,
+    "extra_args": ["-vendor", "apl0"]
+  },
+  "preview_fast": {
+    "container": "mp4",
+    "video_codec": "libx264",
+    "audio_codec": "aac",
+    "crf": 28,
+    "preset": "ultrafast",
+    "resolution": "1280x720",
+    "framerate": 30
+  },
+  "fcp_timeline": {
+    "description": "Final Cut Pro XML (FCPXML v1.10) - Błyskawiczny eksport osi czasu",
+    "mode": "timeline",
+    "target": "fcp",
+    "output_ext": ".fcpxml",
+    "container": "xml",
+    "video_codec": "copy",
+    "audio_codec": "copy"
+  },
+  "fcp_render_prores": {
+    "description": "Final Cut Pro - ProRes 422 LT .mov (CFR, PCM 24-bit 48kHz)",
+    "mode": "render",
+    "target": "fcp",
+    "output_ext": ".mov",
+    "container": "mov",
+    "video_codec": "prores_ks",
+    "profile": 1,
+    "pix_fmt": "yuv422p10le",
+    "audio_codec": "pcm_s24le",
+    "audio_sample_rate": 48000,
+    "extra_args": ["-vendor", "apl0", "-vsync", "cfr", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]
+  },
+  "fcp_render_h264": {
+    "description": "Final Cut Pro - H.264 CFR .mov (szybszy, kompatybilny)",
+    "mode": "render",
+    "target": "fcp",
+    "output_ext": ".mov",
+    "container": "mov",
+    "video_codec": "libx264",
+    "crf": 18,
+    "preset": "medium",
+    "pix_fmt": "yuv420p",
+    "audio_codec": "pcm_s24le",
+    "audio_sample_rate": 48000,
+    "extra_args": ["-vsync", "cfr", "-g", "1", "-bf", "0", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709"]
+  },
+  "davinci_timeline": {
+    "description": "DaVinci Resolve - FCPXML + EDL (CMX 3600)",
+    "mode": "timeline",
+    "target": "davinci",
+    "output_ext": ".fcpxml",
+    "container": "xml",
+    "video_codec": "copy",
+    "audio_codec": "copy",
+    "extra_exports": ["edl"]
+  },
+  "davinci_render_prores": {
+    "description": "DaVinci Resolve - ProRes 422 LT .mov (CFR, PCM 24-bit 48kHz)",
+    "mode": "render",
+    "target": "davinci",
+    "output_ext": ".mov",
+    "container": "mov",
+    "video_codec": "prores_ks",
+    "profile": 1,
+    "pix_fmt": "yuv422p10le",
+    "audio_codec": "pcm_s24le",
+    "audio_sample_rate": 48000,
+    "extra_args": ["-vendor", "apl0", "-vsync", "cfr"]
+  },
+  "davinci_render_dnxhr": {
+    "description": "DaVinci Resolve - DNxHR SQ .mov (CFR, PCM 24-bit 48kHz)",
+    "mode": "render",
+    "target": "davinci",
+    "output_ext": ".mov",
+    "container": "mov",
+    "video_codec": "dnxhd",
+    "profile": "dnxhr_sq",
+    "pix_fmt": "yuv422p",
+    "audio_codec": "pcm_s24le",
+    "audio_sample_rate": 48000,
+    "extra_args": ["-vsync", "cfr"]
+  },
+  "after_effects_timeline": {
+    "description": "After Effects / Premiere Pro - FCP7 XML (xmeml)",
+    "mode": "timeline",
+    "target": "after_effects",
+    "output_ext": "_fcp7.xml",
+    "container": "xml",
+    "video_codec": "copy",
+    "audio_codec": "copy"
+  },
+  "after_effects_render": {
+    "description": "After Effects - H.264 All-Intra .mov (CFR, zero B-frames, zero VFR)",
+    "mode": "render",
+    "target": "after_effects",
+    "output_ext": ".mov",
+    "container": "mov",
+    "video_codec": "libx264",
+    "crf": 18,
+    "preset": "medium",
+    "pix_fmt": "yuv420p",
+    "audio_codec": "pcm_s16le",
+    "audio_sample_rate": 48000,
+    "extra_args": ["-vsync", "cfr", "-g", "1", "-bf", "0", "-keyint_min", "1", "-sc_threshold", "0"]
+  },
+  "daw_audio_timeline": {
+    "description": "Audio DAW (Logic/Reaper/PT/Audition) - EDL z timecodami cięć audio",
+    "mode": "timeline",
+    "target": "daw_audio",
+    "output_ext": ".edl",
+    "container": "edl",
+    "video_codec": "none",
+    "audio_codec": "copy"
+  },
+  "daw_audio_render": {
+    "description": "Audio DAW - Broadcast WAV 24-bit 48kHz (tylko pocięta ścieżka dźwiękowa)",
+    "mode": "render",
+    "target": "daw_audio",
+    "output_ext": "_audio.wav",
+    "container": "wav",
+    "video_codec": "none",
+    "audio_codec": "pcm_s24le",
+    "audio_sample_rate": 48000,
+    "extra_args": ["-ac", "2"]
+  },
+  "universal_render": {
+    "description": "Universal/Social/CapCut - MP4 H.264 High Profile + AAC",
+    "mode": "render",
+    "target": "universal",
+    "output_ext": ".mp4",
+    "container": "mp4",
+    "video_codec": "libx264",
+    "crf": 20,
+    "preset": "fast",
+    "pix_fmt": "yuv420p",
+    "audio_codec": "aac",
+    "audio_bitrate": "192k",
+    "audio_sample_rate": 48000,
+    "extra_args": ["-movflags", "+faststart", "-profile:v", "high", "-level", "4.1"]
+  }
+}

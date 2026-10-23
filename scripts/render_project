@@ -1,0 +1,300 @@
+#!/usr/bin/env python3
+"""
+render_project — wykonuje plan montażu przez Kinocut CLI (individual commands)
+Użycie: ./scripts/render_project <project_name> [--preview]
+"""
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+STUDIO_ROOT = Path(__file__).parent.parent
+PROJECTS_DIR = STUDIO_ROOT / "projects"
+CONFIG_DIR = STUDIO_ROOT / "config"
+
+def load_settings():
+    import yaml
+    settings_path = CONFIG_DIR / "settings.yaml"
+    if settings_path.exists():
+        with open(settings_path) as f:
+            return yaml.safe_load(f)
+    return {}
+
+def format_time(t):
+    """Format time to HH:MM:SS.mmm or seconds."""
+    if isinstance(t, (int, float)):
+        if t < 3600:
+            return f"00:{int(t//60):02d}:{t%60:06.3f}"
+        else:
+            h = int(t // 3600)
+            m = int((t % 3600) // 60)
+            s = t % 60
+            return f"{h:02d}:{m:02d}:{s:06.3f}"
+    return str(t)
+
+def run_kino_cmd(cmd_args, cwd=None):
+    """Run a kino command and return result."""
+    cmd = ["kino"] + cmd_args
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=300)
+    return {
+        "success": result.returncode == 0,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "returncode": result.returncode
+    }
+
+def render_with_kino_cli(project_dir: Path, plan: dict, preview: bool = False) -> dict:
+    """
+    Wykonuje render przez poszczególne komendy Kinocut CLI.
+    Strategia:
+    1. Dla każdej operacji keep_range/trim: kino trim
+    2. Dla slow_motion: kino speed (na wyciętym fragmencie)
+    3. Na końcu: kino merge wszystkich fragmentów
+    """
+    settings = load_settings()
+    export_cfg = plan.get("output", {})
+    if preview:
+        export_cfg = {**export_cfg, **settings.get("preview_export", {})}
+
+    # Collect unique input files
+    input_files = []
+    for op in plan.get("operations", []):
+        if "file" in op and op["file"] not in input_files:
+            input_files.append(op["file"])
+
+    if not input_files:
+        return {"success": False, "error": "No input files referenced in operations"}
+
+    # Track generated segment files
+    segment_files = []
+    segment_counter = 0
+
+    # Process operations in order
+    for op in plan.get("operations", []):
+        action = op.get("action") or op.get("op")
+        if not action:
+            continue
+
+        fname = op.get("file")
+        if not fname:
+            print(f"⚠️  Pomijam operację bez pliku: {op}")
+            continue
+
+        input_path = project_dir / "input" / fname
+        if not input_path.exists():
+            print(f"⚠️  Plik nie istnieje: {input_path}")
+            continue
+
+        if action in ("keep_range", "trim"):
+            segment_counter += 1
+            output_name = f"segment_{segment_counter:03d}.mp4"
+            output_path = project_dir / "previews" / output_name
+
+            start = format_time(op.get("start", 0))
+            end = format_time(op.get("end", 0))
+
+            print(f"  ✂️  Trim {fname} [{start} - {end}] -> {output_name}")
+            result = run_kino_cmd([
+                "trim", str(input_path),
+                "-s", start, "-e", end,
+                "-o", str(output_path),
+                "--accurate"
+            ], cwd=project_dir)
+
+            if not result["success"]:
+                return {"success": False, "error": f"Trim failed: {result['stderr']}"}
+
+            segment_files.append(output_path)
+
+        elif action == "remove_range":
+            # remove_range = keep before + keep after
+            # This requires knowing the full duration - get from media metadata
+            media = plan.get("media", {}).get(fname, {})
+            duration = media.get("duration", 0)
+            if duration <= 0:
+                print(f"⚠️  remove_range needs media duration, skipping: {op}")
+                continue
+
+            start_remove = op.get("start", 0)
+            end_remove = op.get("end", 0)
+
+            # Keep before (if start_remove > 0)
+            if start_remove > 0:
+                segment_counter += 1
+                output_name = f"segment_{segment_counter:03d}.mp4"
+                output_path = project_dir / "previews" / output_name
+                start = format_time(0)
+                end = format_time(start_remove)
+
+                print(f"  ✂️  Trim (before remove) {fname} [{start} - {end}] -> {output_name}")
+                result = run_kino_cmd([
+                    "trim", str(input_path),
+                    "-s", start, "-e", end,
+                    "-o", str(output_path),
+                    "--accurate"
+                ], cwd=project_dir)
+
+                if not result["success"]:
+                    return {"success": False, "error": f"Trim failed: {result['stderr']}"}
+                segment_files.append(output_path)
+
+            # Keep after (if end_remove < duration)
+            if end_remove < duration:
+                segment_counter += 1
+                output_name = f"segment_{segment_counter:03d}.mp4"
+                output_path = project_dir / "previews" / output_name
+                start = format_time(end_remove)
+                end = format_time(duration)
+
+                print(f"  ✂️  Trim (after remove) {fname} [{start} - {end}] -> {output_name}")
+                result = run_kino_cmd([
+                    "trim", str(input_path),
+                    "-s", start, "-e", end,
+                    "-o", str(output_path),
+                    "--accurate"
+                ], cwd=project_dir)
+
+                if not result["success"]:
+                    return {"success": False, "error": f"Trim failed: {result['stderr']}"}
+                segment_files.append(output_path)
+
+        elif action == "slow_motion":
+            # For slow motion, we need to:
+            # 1. Trim the segment
+            # 2. Apply speed change
+            segment_counter += 1
+            trim_name = f"segment_{segment_counter:03d}_trim.mp4"
+            trim_path = project_dir / "previews" / trim_name
+
+            start = format_time(op.get("start", 0))
+            end = format_time(op.get("end", 0))
+
+            print(f"  ✂️  Trim for slow-mo {fname} [{start} - {end}] -> {trim_name}")
+            result = run_kino_cmd([
+                "trim", str(input_path),
+                "-s", start, "-e", end,
+                "-o", str(trim_path),
+                "--accurate"
+            ], cwd=project_dir)
+
+            if not result["success"]:
+                return {"success": False, "error": f"Trim failed: {result['stderr']}"}
+
+            # Apply speed change
+            segment_counter += 1
+            output_name = f"segment_{segment_counter:03d}.mp4"
+            output_path = project_dir / "previews" / output_name
+            speed_factor = op.get("speed", 0.5)
+
+            print(f"  🐢 Slow-mo {trim_name} (factor={speed_factor}) -> {output_name}")
+            result = run_kino_cmd([
+                "speed", str(trim_path),
+                "-f", str(speed_factor),
+                "-o", str(output_path)
+            ], cwd=project_dir)
+
+            # Clean up intermediate trim file
+            trim_path.unlink(missing_ok=True)
+
+            if not result["success"]:
+                return {"success": False, "error": f"Speed failed: {result['stderr']}"}
+
+            segment_files.append(output_path)
+
+        else:
+            print(f"⚠️  Nieznana akcja: {action}, pomijam")
+
+    if not segment_files:
+        return {"success": False, "error": "No segments generated"}
+
+    # Merge all segments
+    output_filename = f"preview_{'draft' if preview else 'final'}.mp4"
+    final_output = project_dir / "previews" / output_filename
+
+    print(f"  🔗 Merge {len(segment_files)} segments -> {output_filename}")
+    merge_args = ["merge"] + [str(f) for f in segment_files] + ["-o", str(final_output)]
+    result = run_kino_cmd(merge_args, cwd=project_dir)
+
+    if not result["success"]:
+        return {"success": False, "error": f"Merge failed: {result['stderr']}"}
+
+    return {
+        "success": True,
+        "output_path": str(final_output),
+        "segments": [str(f) for f in segment_files]
+    }
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Render project using Kinocut CLI")
+    parser.add_argument("project", help="Project name")
+    parser.add_argument("--preview", action="store_true", help="Render preview (lower quality)")
+    parser.add_argument("--validate-only", action="store_true", help="Only validate plan (check operations)")
+    args = parser.parse_args()
+
+    project_dir = PROJECTS_DIR / args.project
+    if not project_dir.exists():
+        print(f"❌ Projekt '{args.project}' nie istnieje")
+        sys.exit(1)
+
+    plan_path = project_dir / "edit_plan.json"
+    if not plan_path.exists():
+        print(f"❌ Brak edit_plan.json")
+        sys.exit(1)
+
+    with open(plan_path) as f:
+        plan = json.load(f)
+
+    if not plan.get("operations"):
+        print("⚠️  Plan nie ma operacji — nic do zrobienia")
+        sys.exit(0)
+
+    print(f"🎬 {'Podgląd' if args.preview else 'Render'} projektu: {args.project}")
+    print(f"   Operacji: {len(plan['operations'])}")
+
+    if args.validate_only:
+        # Validation: check that all referenced files exist and timecodes are valid
+        media = plan.get("media", {})
+        issues = []
+        for op in plan.get("operations", []):
+            fname = op.get("file")
+            if not fname:
+                issues.append(f"Operacja bez pliku: {op}")
+                continue
+            if fname not in media:
+                issues.append(f"Plik {fname} nie ma metadanych (uruchom analyze_media)")
+                continue
+            if "error" in media[fname]:
+                issues.append(f"Plik {fname} ma błąd: {media[fname]['error']}")
+                continue
+
+            action = op.get("action") or op.get("op")
+            if action in ("keep_range", "trim", "slow_motion"):
+                start = op.get("start", 0)
+                end = op.get("end", 0)
+                duration = media[fname].get("duration", 0)
+                if end > duration:
+                    issues.append(f"Operacja {action} na {fname}: end={end} > duration={duration}")
+
+        if issues:
+            print("❌ Walidacja nieudana:")
+            for issue in issues:
+                print(f"   ⚠️  {issue}")
+            sys.exit(1)
+        else:
+            print("✅ Walidacja przeszła pomyślnie")
+            sys.exit(0)
+
+    # Execute
+    result = render_with_kino_cli(project_dir, plan, preview=args.preview)
+
+    if result["success"]:
+        output_path = result["output_path"]
+        print(f"✅ Render zakończony: {output_path}")
+    else:
+        print(f"❌ Render failed:")
+        print(result.get("error", "Unknown error"))
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

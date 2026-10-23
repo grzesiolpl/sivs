@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""
+analyze_media — skanuje pliki w input/ i zapisuje metadane do edit_plan.json
+Użycie: ./scripts/analyze_media <project_name>
+"""
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+STUDIO_ROOT = Path(__file__).parent.parent
+PROJECTS_DIR = STUDIO_ROOT / "projects"
+
+def probe_video(filepath: Path) -> dict:
+    """Używa ffprobe do pobrania metadanych wideo."""
+    cmd = [
+        "ffprobe", "-v", "quiet", "-print_format", "json",
+        "-show_format", "-show_streams", str(filepath)
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        return {"error": result.stderr}
+    import json as json_lib
+    return json_lib.loads(result.stdout)
+
+def analyze_project(project_name: str):
+    project_dir = PROJECTS_DIR / project_name
+    if not project_dir.exists():
+        print(f"❌ Projekt '{project_name}' nie istnieje")
+        return False
+
+    input_dir = project_dir / "input"
+    if not input_dir.exists():
+        print(f"❌ Brak katalogu input/")
+        return False
+
+    # Find video files
+    video_exts = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v", ".mxf"}
+    video_files = [f for f in input_dir.iterdir() if f.suffix.lower() in video_exts]
+
+    if not video_files:
+        print(f"⚠️  Brak plików wideo w {input_dir}")
+        return False
+
+    print(f"🔍 Analizuję {len(video_files)} plik(ów) w {project_name}...")
+
+    # Load existing edit_plan
+    plan_path = project_dir / "edit_plan.json"
+    with open(plan_path) as f:
+        plan = json.load(f)
+
+    # Analyze each file
+    media_info = {}
+    for vf in video_files:
+        print(f"   📹 {vf.name}...", end=" ", flush=True)
+        info = probe_video(vf)
+        if "error" in info:
+            print(f" ❌ {info['error'][:100]}")
+            media_info[vf.name] = {"error": info["error"]}
+        else:
+            # Extract key info
+            fmt = info.get("format", {})
+            video_stream = next((s for s in info.get("streams", []) if s.get("codec_type") == "video"), {})
+            audio_stream = next((s for s in info.get("streams", []) if s.get("codec_type") == "audio"), {})
+
+            media_info[vf.name] = {
+                "path": str(vf.relative_to(project_dir)),
+                "duration": float(fmt.get("duration", 0)),
+                "size_bytes": int(fmt.get("size", 0)),
+                "bitrate": int(fmt.get("bit_rate", 0)),
+                "video": {
+                    "codec": video_stream.get("codec_name"),
+                    "width": video_stream.get("width"),
+                    "height": video_stream.get("height"),
+                    "framerate": video_stream.get("r_frame_rate"),
+                    "pix_fmt": video_stream.get("pix_fmt"),
+                },
+                "audio": {
+                    "codec": audio_stream.get("codec_name"),
+                    "sample_rate": audio_stream.get("sample_rate"),
+                    "channels": audio_stream.get("channels"),
+                } if audio_stream else None,
+            }
+            print(f" OK ({media_info[vf.name]['duration']:.1f}s, {media_info[vf.name]['video']['width']}x{media_info[vf.name]['video']['height']})")
+
+    # Update plan with media info
+    plan["media"] = media_info
+
+    # Save updated plan
+    with open(plan_path, "w") as f:
+        json.dump(plan, f, indent=2)
+
+    print(f"✅ Zaktualizowano {plan_path} z metadanymi mediów")
+    return True
+
+def main():
+    if len(sys.argv) < 2:
+        print("Użycie: ./scripts/analyze_media <project_name>")
+        sys.exit(1)
+    analyze_project(sys.argv[1])
+
+if __name__ == "__main__":
+    main()

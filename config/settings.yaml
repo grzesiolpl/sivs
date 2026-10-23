@@ -1,0 +1,22 @@
+# AI-Video-Studio configuration
+ffmpeg_path: "ffmpeg"  # or full path
+ffprobe_path: "ffprobe"
+default_export:
+  container: "mp4"
+  video_codec: "libx264"
+  audio_codec: "aac"
+  crf: 20
+  preset: "medium"
+  resolution: "1920x1080"
+  framerate: 30
+preview_export:
+  crf: 28
+  preset: "fast"
+upscaler:
+  enabled: false
+  model: "realesrgan-x4plus"
+  scale: 2
+face_blur:
+  enabled: false
+  detector: "retinaface"
+  tracker: "sort"
