@@ -1,16 +1,16 @@
 # SIVS — Super Intelligence Video Studio
 
-**One app. Two interfaces. Zero cloud.**
+**One app. Three interfaces. Zero cloud.**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  SIVS                                                         │
-├──────────────────────┬──────────────────────────────────────┤
-│  🖥️  TUI (Terminal)  │  🌐 Web UI (Next.js)                 │
-│  Keyboard-first      │  Visual timeline editor              │
-│  In-place editing    │  Drag & drop                         │
-│  Instant mpv preview │  Same project data                   │
-└──────────────────────┴──────────────────────────────────────┘
+├──────────────────────┬──────────────────────┬────────────────┤
+│  🖥️  TUI (Terminal)  │  🌐 Web UI (Next.js)  │  📱 Mobile     │
+│  Keyboard-first      │  Visual timeline      │  On-Device AI  │
+│  In-place editing    │  Drag & drop          │  Zero-Cloud    │
+│  Instant mpv preview │  Same project data    │  VAYS-Style    │
+└──────────────────────┴──────────────────────┴────────────────┘
 ```
 
 ## Quick Start
@@ -51,7 +51,7 @@ sivs/
 │   └── sivs               # Global entry point
 │
 ├── web/                    # Web UI (Next.js 15 + Electron)
-│   ├── src/               # React components (Editor, Timeline, Preview)
+│   ├── src/               # React components (Editor, Timeline, Preview, DevTimer)
 │   ├── electron/          # Native macOS app builder
 │   └── package.json
 │
@@ -65,22 +65,25 @@ sivs/
 │   ├── quality_check      # QC reports
 │   └── exporters/         # FCPXML, EDL, FCP7 XML
 │
-└── templates/              # Project templates
-    ├── anonymized_video.json   # Medical (7 tasks)
-    ├── social_video.json       # 9:16 Reels/TikTok
-    └── documentary.json        # Cinematic 24fps
+├── templates/              # Project templates
+│   ├── anonymized_video.json   # Medical (7 tasks)
+│   ├── social_video.json       # 9:16 Reels/TikTok
+│   └── documentary.json        # Cinematic 24fps
+│
+└── mobile/                 # 📱 Mobile Architecture (iOS/Android)
+    └── ARCHITECTURE.md    # 100% On-Device AI (VAYS-Style)
 ```
 
 ## Key Features
 
-| Feature | TUI | Web UI |
-|---------|-----|--------|
-| **In-place editing** | ✅ `.sivs/` manifest in video folder | ✅ Same `.sivs/` data |
-| **AI Brief → Plan** | ✅ OpenRouter (Claude/GPT) | ✅ Same |
-| **3-Level Preview** | ✅ ASCII / mpv EDL (0s!) / ffplay | ✅ Video player |
-| **Phone recording support** | ✅ VFR→CFR, HDR→SDR, frame-precise | ✅ Same |
-| **Export targets** | ✅ FCP, DaVinci, AE, DAW, Universal | ✅ Same |
-| **Keyboard-first** | ✅ P/B/E/R/T/O/W/Q | ❌ Mouse/touch |
+| Feature | TUI | Web UI | Mobile |
+|---------|-----|--------|--------|
+| **In-place editing** | ✅ `.sivs/` manifest in video folder | ✅ Same `.sivs/` data | ✅ Local sandbox |
+| **AI Brief → Plan** | ✅ OpenRouter (Claude/GPT) | ✅ Same | ✅ Local LLM (Gemma 4 E2B) |
+| **3-Level Preview** | ✅ ASCII / mpv EDL (0s!) / ffplay | ✅ Video player | ✅ Native AVMutableComposition |
+| **Phone recording support** | ✅ VFR→CFR, HDR→SDR, frame-precise | ✅ Same | ✅ Native AVAsset |
+| **Export targets** | ✅ FCP, DaVinci, AE, DAW, Universal | ✅ Same | ✅ Same (AirDrop/LAN) |
+| **Input** | ✅ Keyboard (P/B/E/R/T/O/W/Q) | ✅ Mouse/touch | ✅ Touch/Voice |
 
 ## TUI Workflow (6 keys)
 
@@ -113,6 +116,67 @@ sivs --help           # Full guide
 sivs --web            # Launch Web UI
 sivs video.mp4        # Open in TUI
 ```
+
+## 📱 SIVS Mobile (iOS & Android) — Architektura 100% On-Device AI (VAYS-Style)
+
+> **Pełna dokumentacja:** `mobile/ARCHITECTURE.md`
+
+### Założenie: Zero-Cloud / Zero-Backend
+Wszystkie dane (wideo, audio, brief, transkrypcja, plan) nigdy nie opuszczają urządzenia. Cały potok: **Audio → VAD → STT → LLM Planer → Instant Preview → Hardware Encode** wykonuje się lokalnie na NPU/GPU (Apple Neural Engine / Metal na iOS, Vulkan/QNN na Androidzie).
+
+### Stos modeli On-Device
+
+| Warstwa | Model | Runtime |
+|---------|-------|---------|
+| **STT Szybki** | NVIDIA Parakeet TDT v3 (word-level timestamps + diarization) | CoreML (iOS) / ONNX Runtime (Android) |
+| **STT Jakość** | WhisperKit (iOS) / whisper.cpp (Android) | CoreML / ONNX |
+| **VAD** | Silero VAD (< 2 MB, ONNX) | CoreML / ONNX |
+| **LLM Planer** | Gemma 4 E2B (2B params, Q4_K_M ~1.4 GB) | MLX Swift (iOS) / llama.cpp / MediaPipe LLM (Android) |
+| **JSON Schema** | GBNF Grammar (constrained decoding) | llama.cpp / MLX Swift |
+
+### Silnik wideo On-Device (zamiast FFmpeg)
+
+| Funkcja | iOS (Apple Silicon) | Android |
+|---------|---------------------|---------|
+| **Analiza mediów** | `AVAsset` / `AVAssetTrack` | `MediaExtractor` / `MediaMetadataRetriever` |
+| **Instant Preview (0s)** | `AVMutableComposition` + `AVPlayer` | `Media3 Transformer` / `CompositionPlayer` |
+| **Render fizyczny** | `AVAssetExportSession` (VideoToolbox H.264/HEVC) | `Media3 Transformer` + `MediaCodec` |
+| **Face Blur** | `Vision Framework` + `CoreImage` | `ML Kit Face Detection` + OpenGL |
+| **Eksport Timeline** | Generator `.fcpxml` + AirDrop / Local Wi-Fi | Generator `.xml/.fcpxml/.edl` + Share Sheet |
+
+### Architektura aplikacji (2 ścieżki)
+
+| Ścieżka | Technologia | Zalety |
+|---------|-------------|--------|
+| **1. Cross-Platform** | React Native (Expo) + `llama.rn` + `whisper.rn` | 70% kodu z Web UI, jeden kod iOS+Android |
+| **2. Native Apple (SwiftUI)** | Swift / SwiftUI + `WhisperKit` + `MLX Swift` | Natywny dostęp do ANE, CoreML, AVFoundation; macOS bonus |
+
+### Sandbox Data (Privacy First)
+```
+App Sandbox
+├── Documents/Projects/     # brief.md, transcript.json, edit_plan.json
+├── Documents/Exports/      # edit_01_*.mp4, .fcpxml, .xml
+├── Library/AIModels/       # Modele (wykluczone z backupu iCloud)
+│   ├── parakeet-tdt-v3.mlmodelc (~600 MB)
+│   ├── silero-vad.onnx (~2 MB)
+│   └── gemma-4-e2b-it-q4_k_m.gguf (~1.4 GB)
+└── tmp/                    # Tymczasowe WAV 16kHz (usuwane po STT)
+```
+
+### Roadmap Mobile (2026-10-23)
+| Etap | Zadanie | Status |
+|------|---------|--------|
+| 1 | Wybór ścieżki: SwiftUI vs React Native | 🔄 Decyzja |
+| 2 | PoC: `AVMutableComposition` instant preview | ⏳ |
+| 3 | Integracja `WhisperKit` + `Silero VAD` | ⏳ |
+| 4 | Integracja `MLX Swift` + `Gemma 4 E2B` | ⏳ |
+| 5 | `AVAssetExportSession` hardware encode | ⏳ |
+| 6 | `Vision Framework` face blur | ⏳ |
+| 7 | `.fcpxml` generator + AirDrop / Local Wi-Fi sync | ⏳ |
+| 8 | React Native port (jeśli Ścieżka 1) | 📋 |
+| 9 | TestFlight / Play Console Internal Testing | 📋 |
+
+**Pełna dokumentacja:** [`mobile/ARCHITECTURE.md`](mobile/ARCHITECTURE.md)
 
 ## Requirements
 
